@@ -152,6 +152,7 @@ inline ENUMTYPE operator ~ (ENUMTYPE a) { return static_cast<ENUMTYPE>(~static_c
 #include <mechanical_brake.hpp>
 #include <axis.hpp>
 #include <oscilloscope.hpp>
+#include <SixMotorControl/dual_hall_sensor.hpp>
 #include <communication/communication.h>
 #include <communication/can/odrive_can.hpp>
 
@@ -237,6 +238,19 @@ public:
     bool misconfigured_ = false;
 
     uint32_t test_property_ = 0;
+
+    // 6-channel hall decode for dual-three-phase motor setup.
+    DualHallSensor dual_hall_sensor_ {
+        get_gpio(9),  // ENC0_A
+        get_gpio(10), // ENC0_B
+        get_gpio(11), // ENC0_Z
+        get_gpio(12), // ENC1_A
+        get_gpio(13), // ENC1_B
+        get_gpio(14)  // ENC1_Z
+    };
+    uint8_t dual_hall_state_ = 0;
+    float dual_hall_angle_deg_ = 0.0f;
+    bool dual_hall_valid_ = false;
 
     uint32_t last_update_timestamp_ = 0;
     uint32_t n_evt_sampling_ = 0;

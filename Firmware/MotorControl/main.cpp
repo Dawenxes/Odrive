@@ -345,6 +345,7 @@ void ODrive::sampling_cb() {
         for (auto& axis: axes) {
             axis.encoder_.sample_now();
         }
+        dual_hall_sensor_.sample_now();
     }
 }
 
@@ -398,6 +399,11 @@ void ODrive::control_loop_cb(uint32_t timestamp) {
 
         uart_poll();
         odrv.oscilloscope_.update();
+
+        dual_hall_sensor_.update();
+        dual_hall_state_ = dual_hall_sensor_.raw_state();
+        dual_hall_angle_deg_ = dual_hall_sensor_.angle_degrees();
+        dual_hall_valid_ = dual_hall_sensor_.is_valid();
     }
 
     for (auto& axis : axes) {

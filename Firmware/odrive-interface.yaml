@@ -194,6 +194,16 @@ interfaces:
       oscilloscope: {type: Oscilloscope}
       can: {type: Can}
       test_property: uint32
+      dual_hall_state:
+        type: readonly uint8
+        doc: Raw 6-bit hall state. Bits 5..0 correspond to hall1..hall6.
+      dual_hall_angle_deg:
+        type: readonly float32
+        unit: deg
+        doc: Decoded electrical angle from 6-channel hall table (0 to 330 in 30 degree steps).
+      dual_hall_valid:
+        type: readonly bool
+        doc: True if the current 6-bit hall state is one of the 12 valid commutation states.
       otp_valid: readonly bool
         
     functions:
