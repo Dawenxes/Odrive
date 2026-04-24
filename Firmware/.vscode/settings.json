@@ -1,6 +1,7 @@
 {
     "C_Cpp.intelliSenseEngine": "Default",
     "C_Cpp.intelliSenseEngineFallback": "Disabled",
+    "python.defaultInterpreterPath": "${workspaceFolder}/../.venv/Scripts/python.exe",
     "files.associations": {
         "memory": "cpp",
         "utility": "cpp",

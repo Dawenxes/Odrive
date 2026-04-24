@@ -36,5 +36,38 @@
             "command": "openocd -f \"interface/stlink-v2.cfg\" -f \"target/stm32f4x_stlink.cfg\" -c \"gdb_port 3333; log_output openocd.log\"",
             "problemMatcher": []
         }
+        ,
+        {
+            "label": "Launch ODrive GUI Server",
+            "type": "shell",
+            "command": "../../.venv/Scripts/python",
+            "args": [
+                "odrive_server.py",
+                "../../tools"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}/../GUI/server"
+            },
+            "problemMatcher": [],
+            "presentation": {
+                "panel": "new"
+            }
+        },
+        {
+            "label": "Run ODrive GUI Frontend",
+            "type": "shell",
+            "command": "npm",
+            "args": [
+                "run",
+                "serve"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}/../GUI"
+            },
+            "problemMatcher": [],
+            "presentation": {
+                "panel": "new"
+            }
+        }
     ]
 }
