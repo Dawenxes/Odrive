@@ -79,7 +79,7 @@ erase-stlink2:
 
 # Sometimes the STM32 will get it's protection bits set for unknown reasons. Unlock it with this command
 unlock-stlink2:
-	$(OPENOCD) -c 'reset halt' -c 'stm32f2x unlock 0'
+	$(OPENOCD) -c 'reset halt' -c 'stm32f2x unlock 0' -c "exit"
 
 flash-bmp: all
 	arm-none-eabi-gdb --ex 'target extended-remote $(BMP_PORT)' \

@@ -400,10 +400,23 @@ void ODrive::control_loop_cb(uint32_t timestamp) {
         uart_poll();
         odrv.oscilloscope_.update();
 
-        dual_hall_sensor_.update();
+        const bool dual_hall_ok = dual_hall_sensor_.update(current_meas_period);
         dual_hall_state_ = dual_hall_sensor_.raw_state();
         dual_hall_angle_deg_ = dual_hall_sensor_.angle_degrees();
         dual_hall_valid_ = dual_hall_sensor_.is_valid();
+        dual_hall_phase_rad_ = dual_hall_sensor_.phase_rad();
+        dual_hall_phase_vel_rad_s_ = dual_hall_sensor_.phase_vel_rad_s();
+        dual_hall_pos_estimate_ = dual_hall_sensor_.pos_estimate_turns();
+        dual_hall_vel_estimate_ = dual_hall_sensor_.vel_estimate_turns_s();
+        dual_hall_illegal_state_count_ = dual_hall_sensor_.illegal_state_count();
+        dual_hall_consecutive_illegal_count_ = dual_hall_sensor_.consecutive_illegal_state_count();
+        if (!dual_hall_ok && dual_hall_consecutive_illegal_count_ >= 3) {
+            //disarm_with_error(ERROR_DUAL_HALL_ILLEGAL_STATE);
+        }
+
+        dual_current_sensor_.update(motors[0].current_meas_, motors[1].current_meas_);
+        dual_current_meas_ = dual_current_sensor_.current_meas().value_or(Iph_DualABC_t{0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f});
+        dual_current_valid_ = dual_current_sensor_.valid();
     }
 
     for (auto& axis : axes) {
@@ -539,6 +552,8 @@ static void rtos_main(void*) {
     pwm0_input.init();
 
     // Set up the CS pins for absolute encoders (TODO: move to GPIO init switch statement)
+    odrv.dual_hall_sensor_.update_pll_gains(1000.0f);
+
     for(auto& axis : axes){
         if(axis.encoder_.config_.mode & Encoder::MODE_FLAG_ABS){
             axis.encoder_.abs_spi_cs_pin_init();

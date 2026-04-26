@@ -153,6 +153,7 @@ inline ENUMTYPE operator ~ (ENUMTYPE a) { return static_cast<ENUMTYPE>(~static_c
 #include <axis.hpp>
 #include <oscilloscope.hpp>
 #include <SixMotorControl/dual_hall_sensor.hpp>
+#include <SixMotorControl/dual_current_sensor.hpp>
 #include <communication/communication.h>
 #include <communication/can/odrive_can.hpp>
 
@@ -224,7 +225,7 @@ public:
 
     SystemStats_t system_stats_;
 
-    // Edit these to suit your capture needs
+    // 编辑这些以适应您的捕获需求
     Oscilloscope oscilloscope_{
         nullptr, // trigger_src
         0.5f, // trigger_threshold
@@ -239,18 +240,25 @@ public:
 
     uint32_t test_property_ = 0;
 
-    // 6-channel hall decode for dual-three-phase motor setup.
-    DualHallSensor dual_hall_sensor_ {
-        get_gpio(9),  // ENC0_A
-        get_gpio(10), // ENC0_B
-        get_gpio(11), // ENC0_Z
-        get_gpio(12), // ENC1_A
-        get_gpio(13), // ENC1_B
-        get_gpio(14)  // ENC1_Z
+    // 3-channel hall decode for three-phase motor setup (120° spacing).
+    HallSensor dual_hall_sensor_ {
+        get_gpio(9),  // ENC0_A  -> Hall A
+        get_gpio(10), // ENC0_B  -> Hall B
+        get_gpio(11)  // ENC0_Z  -> Hall C
     };
     uint8_t dual_hall_state_ = 0;
     float dual_hall_angle_deg_ = 0.0f;
     bool dual_hall_valid_ = false;
+    float dual_hall_phase_rad_ = 0.0f;
+    float dual_hall_phase_vel_rad_s_ = 0.0f;
+    float dual_hall_pos_estimate_ = 0.0f;
+    float dual_hall_vel_estimate_ = 0.0f;
+    uint32_t dual_hall_illegal_state_count_ = 0;
+    uint32_t dual_hall_consecutive_illegal_count_ = 0;
+
+    DualCurrentSensor dual_current_sensor_;
+    Iph_DualABC_t dual_current_meas_ = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
+    bool dual_current_valid_ = false;
 
     uint32_t last_update_timestamp_ = 0;
     uint32_t n_evt_sampling_ = 0;

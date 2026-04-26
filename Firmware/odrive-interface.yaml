@@ -10,6 +10,7 @@ userdata:
     #include <tuple>
     using float2D = std::pair<float, float>;
     struct Iph_ABC_t { float phA; float phB; float phC; };
+    struct Iph_DualABC_t { float phA1; float phB1; float phC1; float phA2; float phB2; float phC2; };
 
 interfaces:
   ODrive:
@@ -75,6 +76,10 @@ interfaces:
           DC_BUS_OVER_CURRENT:
             doc: |
               Too much current was pulled from the power supply. `ibus` exceeded `config.dc_max_positive_current`.
+          DUAL_HALL_ILLEGAL_STATE:
+            doc: |
+              The dual 6-channel hall decoder observed persistent illegal hall states.
+              This usually indicates wiring faults, sensor failures, or severe EMI.
           BRAKE_DEADTIME_VIOLATION:
           BRAKE_DUTY_CYCLE_NAN:
           INVALID_BRAKE_RESISTANCE: {doc: '`config.brake_resistance` is non-positive or NaN. Make sure that `config.brake_resistance` is a positive number.'}
@@ -196,14 +201,45 @@ interfaces:
       test_property: uint32
       dual_hall_state:
         type: readonly uint8
-        doc: Raw 6-bit hall state. Bits 5..0 correspond to hall1..hall6.
+        doc: Raw 3-bit hall state. Bits 2..0 correspond to HallC, HallB, HallA.
       dual_hall_angle_deg:
         type: readonly float32
         unit: deg
-        doc: Decoded electrical angle from 6-channel hall table (0 to 330 in 30 degree steps).
+        doc: Smoothed electrical angle estimate from dual-hall PLL, in degrees.
       dual_hall_valid:
         type: readonly bool
-        doc: True if the current 6-bit hall state is one of the 12 valid commutation states.
+        doc: True if the current 3-bit hall state is one of the 6 valid commutation states.
+      dual_hall_phase_rad:
+        type: readonly float32
+        unit: rad
+        doc: Smoothed wrapped electrical phase estimate in [-pi, pi).
+      dual_hall_phase_vel_rad_s:
+        type: readonly float32
+        unit: rad/s
+        doc: Smoothed electrical phase velocity estimate from dual-hall PLL.
+      dual_hall_pos_estimate:
+        type: readonly float32
+        unit: turn
+        doc: Continuous electrical position estimate in turns.
+      dual_hall_vel_estimate:
+        type: readonly float32
+        unit: turn/s
+        doc: Continuous electrical velocity estimate in turns per second.
+      dual_hall_illegal_state_count:
+        type: readonly uint32
+        doc: Total number of illegal dual-hall states observed.
+      dual_hall_consecutive_illegal_count:
+        type: readonly uint32
+        doc: Current run length of consecutive illegal dual-hall states.
+      dual_current_phA1: {type: readonly float32, c_name: dual_current_meas_.phA1, unit: A}
+      dual_current_phB1: {type: readonly float32, c_name: dual_current_meas_.phB1, unit: A}
+      dual_current_phC1: {type: readonly float32, c_name: dual_current_meas_.phC1, unit: A}
+      dual_current_phA2: {type: readonly float32, c_name: dual_current_meas_.phA2, unit: A}
+      dual_current_phB2: {type: readonly float32, c_name: dual_current_meas_.phB2, unit: A}
+      dual_current_phC2: {type: readonly float32, c_name: dual_current_meas_.phC2, unit: A}
+      dual_current_valid:
+        type: readonly bool
+        doc: True if both 3-phase current measurements are valid.
       otp_valid: readonly bool
         
     functions:
