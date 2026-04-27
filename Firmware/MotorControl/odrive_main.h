@@ -240,11 +240,14 @@ public:
 
     uint32_t test_property_ = 0;
 
-    // 3-channel hall decode for three-phase motor setup (120° spacing).
-    HallSensor dual_hall_sensor_ {
-        get_gpio(9),  // ENC0_A  -> Hall A
-        get_gpio(10), // ENC0_B  -> Hall B
-        get_gpio(11)  // ENC0_Z  -> Hall C
+    // 6-channel hall decode for dual-three-phase motor setup.
+    DualHallSensor dual_hall_sensor_ {
+        get_gpio(9),  // ENC0_A
+        get_gpio(10), // ENC0_B
+        get_gpio(11), // ENC0_Z
+        get_gpio(12), // ENC1_A
+        get_gpio(13), // ENC1_B
+        get_gpio(14)  // ENC1_Z
     };
     uint8_t dual_hall_state_ = 0;
     float dual_hall_angle_deg_ = 0.0f;
