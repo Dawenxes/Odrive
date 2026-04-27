@@ -40,36 +40,12 @@ public:
         pos_estimate_turns_ = 0.0f;
         vel_estimate_turns_s_ = 0.0f;
         consecutive_illegal_state_count_ = 0;
-        debounced_state_ = 0;
-        debounce_count_ = 0;
-    }
-
-    // Set debounce threshold (in number of consecutive valid samples)
-    // Recommended: 2-3 for most applications (at 8kHz: 0.25-0.375ms debounce)
-    void set_debounce_threshold(uint8_t threshold) {
-        debounce_threshold_ = threshold;
     }
 
     // 解码采样的霍尔信号并运行 PLL 估算器以生成平滑的相位和速度。
     bool update(float dt) {
         raw_state_ = read_hall_state_sampled();
-        
-        // Debounce logic: only accept state change after consecutive valid samples
-        if (raw_state_ != debounced_state_) {
-            debounce_count_++;
-            if (debounce_count_ < debounce_threshold_) {
-                // Not yet confirmed; ignore and keep using debounced_state_
-                raw_state_ = debounced_state_;
-            } else {
-                // State confirmed after threshold samples
-                debounced_state_ = raw_state_;
-                debounce_count_ = 0;
-            }
-        } else {
-            // State is stable
-            debounce_count_ = 0;
-        }
-        
+
         int32_t hall_cnt = 0;
         float discrete_angle = 0.0f;
         const bool ok = decode_state(raw_state_, &hall_cnt, &discrete_angle);
@@ -227,9 +203,6 @@ private:
     std::array<Stm32Gpio, 6> hall_gpios_;
     std::array<uint16_t, ports_to_sample.size()> port_samples_{};
     uint8_t raw_state_ = 0;
-    uint8_t debounced_state_ = 0;  // Debounced hall state
-    uint8_t debounce_count_ = 0;   // Counter for confirming state transitions
-    uint8_t debounce_threshold_ = 2; // Default: require 2 consecutive matches to confirm change (at 8kHz ≈ 0.25ms)
 
     bool initialized_ = false;
     int32_t count_in_cpr_ = 0;
