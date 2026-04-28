@@ -534,9 +534,6 @@ static void rtos_main(void*) {
     pwm0_input.init();
 
     // Set up the CS pins for absolute encoders (TODO: move to GPIO init switch statement)
-    odrv.dual_hall_sensor_.update_pll_gains(1000.0f);
-    odrv.dual_hall_sensor_.set_debounce_threshold(3);
-
     for(auto& axis : axes){
         if(axis.encoder_.config_.mode & Encoder::MODE_FLAG_ABS){
             axis.encoder_.abs_spi_cs_pin_init();
