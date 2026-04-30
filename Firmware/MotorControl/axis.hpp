@@ -195,6 +195,11 @@ public:
     int64_t steps_ = 0; // Steps counted at interface
     uint32_t last_drv_fault_ = 0;
 
+    // Debug variables for plotting spoofed angles
+    float hfi_angle_spoofed_ = 0.0f;
+    float observer_angle_spoofed_ = 0.0f;
+    float hall_angle_real_ = 0.0f;
+
     // updated from config in constructor, and on protocol hook
     Stm32Gpio step_gpio_;
     Stm32Gpio dir_gpio_;
