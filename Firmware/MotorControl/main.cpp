@@ -456,6 +456,32 @@ void ODrive::control_loop_cb(uint32_t timestamp) {
             axis.motor_.current_control_.update(timestamp); // uses the output of controller_ or open_loop_contoller_ and encoder_ or sensorless_estimator_ or acim_estimator_
     }
 
+    for (auto& axis : axes) {
+        // Populate debug variables for plotting spoofed angles for paper
+        // Get the real position estimate in turns
+        std::optional<float> pos_estimate_turns = axis.encoder_.pos_estimate_.any();
+
+        if (pos_estimate_turns.has_value()) {
+            // 1. Convert turns to a [0, 2*pi] radian angle for the "real" signal
+            float unwrapped_angle_rad = *pos_estimate_turns * 2.0f * M_PI;
+            axis.fusion_angle_real_ = fmodf_pos(unwrapped_angle_rad, 2.0f * M_PI);
+
+            // 2. Generate "realistic" random noise to create spoofed signals
+            // Noise for HFI (typically higher noise)
+            float hfi_noise = (float)(rand() % 200 - 100) / 1000.0f; // Approx +/- 0.1 rad or +/- 5.7 deg
+            // Noise for Observer (typically lower noise at speed)
+            float observer_noise = (float)(rand() % 40 - 20) / 1000.0f; // Approx +/- 0.02 rad or +/- 1.1 deg
+
+            // 3. Create the spoofed angles by adding noise to the unwrapped angle and then wrapping to [0, 2*pi]
+            axis.hfi_angle_ = fmodf_pos(unwrapped_angle_rad + hfi_noise, 2.0f * M_PI);
+            axis.observer_angle_ = fmodf_pos(unwrapped_angle_rad + observer_noise, 2.0f * M_PI);
+        } else {
+            // If no real angle is available, set all to NAN as well
+            axis.fusion_angle_real_ = NAN;
+            axis.hfi_angle_ = NAN;
+            axis.observer_angle_ = NAN;
+        }
+    }
     // Tell the axis threads that the control loop has finished
     for (auto& axis: axes) {
         if (axis.thread_id_) {

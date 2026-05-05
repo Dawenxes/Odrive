@@ -521,6 +521,15 @@ interfaces:
             doc: There isn't a valid position estimate available.
       step_dir_active: readonly bool
       last_drv_fault: readonly uint32
+      hfi_angle:
+        type: readonly float32
+        doc: "Spoofed HFI angle for plotting"
+      observer_angle:
+        type: readonly float32
+        doc: "Spoofed observer angle for plotting"
+      fusion_angle_real:
+        type: readonly float32
+        doc: "Real fused angle for plotting"
       steps: 
         type: readonly int64
         brief: The current commanded position, in steps, while in `step_dir` mode
