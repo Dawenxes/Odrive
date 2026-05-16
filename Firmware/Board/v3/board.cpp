@@ -305,6 +305,11 @@ bool board_init() {
     MX_TIM5_Init();
     MX_TIM13_Init();
 
+    // Configure TIM1 as master and TIM8 as slave for optional six-phase sync.
+    // This must be called after MX_TIM1_Init() / MX_TIM8_Init() but before
+    // start_timers().
+    configure_pwm_master_slave_sync();
+
     // External interrupt lines are individually enabled in stm32_gpio.cpp
     HAL_NVIC_SetPriority(EXTI0_IRQn, 1, 0);
     HAL_NVIC_EnableIRQ(EXTI0_IRQn);
@@ -377,7 +382,38 @@ bool board_init() {
     return true;
 }
 
-void start_timers() {
+// ------------------------------------------------------------------------
+// PWM master-slave sync configuration
+// ------------------------------------------------------------------------
+
+void configure_pwm_master_slave_sync() {
+    CRITICAL_SECTION() {
+        // Stop both timers before reconfiguring
+        TIM1->CR1 &= ~TIM_CR1_CEN;
+        TIM8->CR1 &= ~TIM_CR1_CEN;
+
+        // --- TIM1: Master Mode ---
+        // MMS = 010: Update event generates TRGO
+        TIM1->CR2 &= ~TIM_CR2_MMS;
+        TIM1->CR2 |= TIM_CR2_MMS_1;
+
+        // --- TIM8: Slave Mode ---
+        // TS = 000: Internal Trigger 0 (ITR0) = TIM1
+        TIM8->SMCR &= ~TIM_SMCR_TS;
+        TIM8->SMCR |= TIM_SMCR_TS_0;  // TS = 000
+
+        // SMS = 110: Trigger Mode - start counting on trigger rising edge
+        TIM8->SMCR &= ~TIM_SMCR_SMS;
+        TIM8->SMCR |= TIM_SMCR_SMS_2 | TIM_SMCR_SMS_1;
+    }
+}
+
+bool check_pwm_phase_sync() {
+    int32_t diff = (int32_t)TIM1->CNT - (int32_t)TIM8->CNT;
+    return std::abs(diff) <= TIM_PHASE_SYNC_THRESHOLD;
+}
+
+void start_timers(bool six_phase_sync) {
     CRITICAL_SECTION() {
         // Temporarily disable ADC triggers so they don't trigger as a side
         // effect of starting the timers.
@@ -385,16 +421,38 @@ void start_timers() {
         hadc2.Instance->CR2 &= ~(ADC_CR2_EXTEN | ADC_CR2_JEXTEN);
         hadc3.Instance->CR2 &= ~(ADC_CR2_EXTEN | ADC_CR2_JEXTEN);
 
-        /*
-        * Synchronize TIM1, TIM8 and TIM13 such that:
-        *  1. The triangle waveform of TIM1 leads the triangle waveform of TIM8 by a
-        *     90° phase shift.
-        *  2. Each TIM13 reload coincides with a TIM1 lower update event.
-        */
-        Stm32Timer::start_synchronously<3>(
-            {&htim1, &htim8, &htim13},
-            {TIM1_INIT_COUNT, 0, TIM1_INIT_COUNT / 2 /* TIM13 is on a clock that's only have as fast as TIM1 */}
-        );
+        timestamp_six_phase_sync = six_phase_sync;
+
+        if (six_phase_sync) {
+            /*
+             * Six-phase mode: TIM1 and TIM8 run in phase.
+             * TIM1 is master (TRGO on Update), TIM8 is slave (Trigger Mode).
+             * Both start from the same initial counter value.
+             */
+            TIM1->CNT = TIM1_INIT_COUNT;
+            TIM8->CNT = TIM1_INIT_COUNT;  // slave starts from same count
+            TIM13->CNT = TIM1_INIT_COUNT / 2;
+
+            // Force register update, clear flags
+            TIM1->EGR |= TIM_EGR_UG;
+            TIM8->EGR |= TIM_EGR_UG;
+            TIM13->EGR |= TIM_EGR_UG;
+            __HAL_TIM_CLEAR_IT(&htim1, TIM_IT_UPDATE);
+            __HAL_TIM_CLEAR_IT(&htim8, TIM_IT_UPDATE);
+            __HAL_TIM_CLEAR_IT(&htim13, TIM_IT_UPDATE);
+
+            // Start master only; slave will auto-start on first TIM1 Update
+            TIM1->CR1 |= TIM_CR1_CEN;
+        } else {
+            /*
+            * Legacy dual-axis mode:
+            *  TIM1 leads TIM8 by ~90° phase shift.
+            */
+            Stm32Timer::start_synchronously<3>(
+                {&htim1, &htim8, &htim13},
+                {TIM1_INIT_COUNT, 0, TIM1_INIT_COUNT / 2}
+            );
+        }
 
         hadc1.Instance->CR2 |= (ADC_EXTERNALTRIGINJECCONVEDGE_RISING);
         hadc2.Instance->CR2 |= (ADC_EXTERNALTRIGCONVEDGE_RISING | ADC_EXTERNALTRIGINJECCONVEDGE_RISING);
@@ -474,6 +532,10 @@ void TIM5_IRQHandler(void) {
 volatile uint32_t timestamp_ = 0;
 volatile bool counting_down_ = false;
 
+// When true, M1 uses the same timestamp offset as M0 (for six-phase sync mode).
+// Set by start_timers(true) and cleared by start_timers(false).
+volatile bool timestamp_six_phase_sync = false;
+
 void TIM8_UP_TIM13_IRQHandler(void) {
     COUNT_IRQ(TIM8_UP_TIM13_IRQn);
     
@@ -492,6 +554,15 @@ void TIM8_UP_TIM13_IRQHandler(void) {
         return;
     }
     counting_down_ = counting_down;
+
+    // Phase sync check for six-phase mode (only when counting up = control iteration)
+    if (!counting_down && timestamp_six_phase_sync) {
+        if (!check_pwm_phase_sync()) {
+            motors[0].disarm_with_error(Motor::ERROR_TIMER_UPDATE_MISSED);
+            motors[1].disarm_with_error(Motor::ERROR_TIMER_UPDATE_MISSED);
+            return;
+        }
+    }
 
     timestamp_ += TIM_1_8_PERIOD_CLOCKS * (TIM_1_8_RCR + 1);
 
@@ -540,8 +611,12 @@ void ControlLoop_IRQHandler(void) {
         current1 = {0.0f, 0.0f};
     }
 
-    motors[0].current_meas_cb(timestamp - TIM1_INIT_COUNT, current0);
-    motors[1].current_meas_cb(timestamp, current1);
+    // In six-phase sync mode both timers share the same timestamp offset.
+    int32_t ts_offset_m0 = TIM1_INIT_COUNT;
+    int32_t ts_offset_m1 = timestamp_six_phase_sync ? TIM1_INIT_COUNT : 0;
+
+    motors[0].current_meas_cb(timestamp - ts_offset_m0, current0);
+    motors[1].current_meas_cb(timestamp - ts_offset_m1, current1);
 
     odrv.control_loop_cb(timestamp);
 
@@ -556,11 +631,11 @@ void ControlLoop_IRQHandler(void) {
         motors[1].disarm_with_error(Motor::ERROR_BAD_TIMING);
     }
 
-    motors[0].dc_calib_cb(timestamp + TIM_1_8_PERIOD_CLOCKS * (TIM_1_8_RCR + 1) - TIM1_INIT_COUNT, current0);
-    motors[1].dc_calib_cb(timestamp + TIM_1_8_PERIOD_CLOCKS * (TIM_1_8_RCR + 1), current1);
+    motors[0].dc_calib_cb(timestamp + TIM_1_8_PERIOD_CLOCKS * (TIM_1_8_RCR + 1) - ts_offset_m0, current0);
+    motors[1].dc_calib_cb(timestamp + TIM_1_8_PERIOD_CLOCKS * (TIM_1_8_RCR + 1) - ts_offset_m1, current1);
 
-    motors[0].pwm_update_cb(timestamp + 3 * TIM_1_8_PERIOD_CLOCKS * (TIM_1_8_RCR + 1) - TIM1_INIT_COUNT);
-    motors[1].pwm_update_cb(timestamp + 3 * TIM_1_8_PERIOD_CLOCKS * (TIM_1_8_RCR + 1));
+    motors[0].pwm_update_cb(timestamp + 3 * TIM_1_8_PERIOD_CLOCKS * (TIM_1_8_RCR + 1) - ts_offset_m0);
+    motors[1].pwm_update_cb(timestamp + 3 * TIM_1_8_PERIOD_CLOCKS * (TIM_1_8_RCR + 1) - ts_offset_m1);
 
     // If we did everything right, the TIM8 update handler should have been
     // called exactly once between the start of this function and now.
@@ -589,5 +664,20 @@ void OTG_FS_IRQHandler(void) {
     COUNT_IRQ(OTG_FS_IRQn);
     HAL_PCD_IRQHandler(&hpcd_USB_OTG_FS);
 }
+
+// ------------------------------------------------------------------------
+// Six-phase (dual-three-phase) axis definition
+// ------------------------------------------------------------------------
+SixPhaseAxis six_phase_axis{
+    0,                  // axis_num
+    motors[0],          // motor0 (winding set 1, M0)
+    motors[1],          // motor1 (winding set 2, M1)
+    encoders[0],        // unified encoder (uses axis0 encoder by default)
+    sensorless_estimators[0], // sensorless estimator
+    trap[0],            // trapezoidal trajectory
+    endstops[0],        // min endstop
+    endstops[1],        // max endstop
+    mechanical_brakes[0] // mechanical brake
+};
 
 }

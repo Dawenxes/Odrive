@@ -28,6 +28,12 @@ extern char _estack; // provided by the linker script
 
 ODrive odrv{};
 
+// Link the global six-phase axis (defined in board.cpp) into the ODrive object.
+extern SixPhaseAxis six_phase_axis;
+__attribute__((constructor)) void link_six_phase_axis() {
+    odrv.six_phase_axis_ = &six_phase_axis;
+}
+
 
 ConfigManager config_manager;
 
@@ -100,6 +106,7 @@ static bool config_read_all() {
                   config_manager.read(&motors[i].motor_thermistor_.config_) &&
                   config_manager.read(&axes[i].config_);
     }
+    success = success && config_manager.read(&odrv.six_phase_axis_->config_);
     return success;
 }
 
@@ -120,6 +127,7 @@ static bool config_write_all() {
                   config_manager.write(&motors[i].motor_thermistor_.config_) &&
                   config_manager.write(&axes[i].config_);
     }
+    success = success && config_manager.write(&odrv.six_phase_axis_->config_);
     return success;
 }
 
@@ -140,6 +148,7 @@ static void config_clear_all() {
         motors[i].motor_thermistor_.config_ = {};
         axes[i].clear_config();
     }
+    odrv.six_phase_axis_->clear_config();
 }
 
 static bool config_apply_all() {
@@ -153,6 +162,7 @@ static bool config_apply_all() {
                && motors[i].motor_thermistor_.apply_config()
                && axes[i].apply_config();
     }
+    success = success && odrv.six_phase_axis_->apply_config();
     return success;
 }
 
@@ -213,14 +223,20 @@ void ODrive::enter_dfu_mode() {
 }
 
 bool ODrive::any_error() {
-    return error_ != ODrive::ERROR_NONE
-        || std::any_of(axes.begin(), axes.end(), [](Axis& axis){
-            return axis.error_ != Axis::ERROR_NONE
-                || axis.motor_.error_ != Motor::ERROR_NONE
-                || axis.sensorless_estimator_.error_ != SensorlessEstimator::ERROR_NONE
-                || axis.encoder_.error_ != Encoder::ERROR_NONE
-                || axis.controller_.error_ != Controller::ERROR_NONE;
-        });
+    bool axes_error = std::any_of(axes.begin(), axes.end(), [](Axis& axis){
+        return axis.error_ != Axis::ERROR_NONE
+            || axis.motor_.error_ != Motor::ERROR_NONE
+            || axis.sensorless_estimator_.error_ != SensorlessEstimator::ERROR_NONE
+            || axis.encoder_.error_ != Encoder::ERROR_NONE
+            || axis.controller_.error_ != Controller::ERROR_NONE;
+    });
+    bool sixph_error = six_phase_axis_ && (
+        six_phase_axis_->error_ != SixPhaseAxis::ERROR_NONE
+        || six_phase_axis_->motor0_.error_ != Motor::ERROR_NONE
+        || six_phase_axis_->motor1_.error_ != Motor::ERROR_NONE
+        || six_phase_axis_->encoder_.error_ != Encoder::ERROR_NONE
+    );
+    return error_ != ODrive::ERROR_NONE || axes_error || sixph_error;
 }
 
 uint64_t ODrive::get_drv_fault() {
@@ -242,6 +258,12 @@ void ODrive::clear_errors() {
         axis.encoder_.spi_error_rate_ = 0.0f;
         axis.error_ = Axis::ERROR_NONE;
     }
+    if (six_phase_axis_) {
+        six_phase_axis_->error_ = SixPhaseAxis::ERROR_NONE;
+        six_phase_axis_->motor0_.error_ = Motor::ERROR_NONE;
+        six_phase_axis_->motor1_.error_ = Motor::ERROR_NONE;
+        six_phase_axis_->controller_.error_ = SixPhaseController::ERROR_NONE;
+    }
     error_ = ERROR_NONE;
     if (odrv.config_.enable_brake_resistor) {
         safety_critical_arm_brake_resistor();
@@ -253,6 +275,10 @@ extern "C" {
 void vApplicationStackOverflowHook(xTaskHandle *pxTask, signed portCHAR *pcTaskName) {
     for(auto& axis: axes){
         axis.motor_.disarm();
+    }
+    if (odrv.six_phase_axis_) {
+        odrv.six_phase_axis_->motor0_.disarm();
+        odrv.six_phase_axis_->motor1_.disarm();
     }
     safety_critical_disarm_brake_resistor();
     for (;;); // TODO: safe action
@@ -314,6 +340,10 @@ void ODrive::disarm_with_error(Error error) {
     CRITICAL_SECTION() {
         for (auto& axis: axes) {
             axis.motor_.disarm_with_error(Motor::ERROR_SYSTEM_LEVEL);
+        }
+        if (six_phase_axis_) {
+            six_phase_axis_->motor0_.disarm_with_error(Motor::ERROR_SYSTEM_LEVEL);
+            six_phase_axis_->motor1_.disarm_with_error(Motor::ERROR_SYSTEM_LEVEL);
         }
         safety_critical_disarm_brake_resistor();
         error_ |= error;
@@ -397,6 +427,17 @@ void ODrive::control_loop_cb(uint32_t timestamp) {
             axis.sensorless_estimator_.vel_estimate_.reset();
         }
 
+        // Reset 6-phase controller outputs so stale values don't propagate
+        if (odrv.six_phase_axis_) {
+            odrv.six_phase_axis_->controller_.torque_output_.reset();
+            odrv.six_phase_axis_->controller_.Idq_setpoint_1_.reset();
+            odrv.six_phase_axis_->controller_.Idq_setpoint_2_.reset();
+            odrv.six_phase_axis_->controller_.Vdq_setpoint_1_.reset();
+            odrv.six_phase_axis_->controller_.Vdq_setpoint_2_.reset();
+            odrv.six_phase_axis_->phase_offset_provider_.phase_out_.reset();
+            odrv.six_phase_axis_->phase_offset_provider_.phase_vel_out_.reset();
+        }
+
         uart_poll();
         odrv.oscilloscope_.update();
     }
@@ -418,6 +459,16 @@ void ODrive::control_loop_cb(uint32_t timestamp) {
 
             if (!checks_ok || !watchdog_ok) {
                 axis.motor_.disarm();
+            }
+        }
+
+        // Six-phase axis checks (if active)
+        if (odrv.six_phase_axis_) {
+            bool sp_checks_ok = odrv.six_phase_axis_->do_checks(timestamp);
+            bool sp_watchdog_ok = odrv.six_phase_axis_->watchdog_check();
+            if (!sp_checks_ok || !sp_watchdog_ok) {
+                odrv.six_phase_axis_->motor0_.disarm();
+                odrv.six_phase_axis_->motor1_.disarm();
             }
         }
     }
@@ -456,32 +507,14 @@ void ODrive::control_loop_cb(uint32_t timestamp) {
             axis.motor_.current_control_.update(timestamp); // uses the output of controller_ or open_loop_contoller_ and encoder_ or sensorless_estimator_ or acim_estimator_
     }
 
-    for (auto& axis : axes) {
-        // Populate debug variables for plotting spoofed angles for paper
-        // Get the real position estimate in turns
-        std::optional<float> pos_estimate_turns = axis.encoder_.pos_estimate_.any();
-
-        if (pos_estimate_turns.has_value()) {
-            // 1. Convert turns to a [0, 2*pi] radian angle for the "real" signal
-            float unwrapped_angle_rad = *pos_estimate_turns * 2.0f * M_PI;
-            axis.fusion_angle_real_ = fmodf_pos(unwrapped_angle_rad, 2.0f * M_PI);
-
-            // 2. Generate "realistic" random noise to create spoofed signals
-            // Noise for HFI (typically higher noise)
-            float hfi_noise = (float)(rand() % 200 - 100) / 1000.0f; // Approx +/- 0.1 rad or +/- 5.7 deg
-            // Noise for Observer (typically lower noise at speed)
-            float observer_noise = (float)(rand() % 40 - 20) / 1000.0f; // Approx +/- 0.02 rad or +/- 1.1 deg
-
-            // 3. Create the spoofed angles by adding noise to the unwrapped angle and then wrapping to [0, 2*pi]
-            axis.hfi_angle_ = fmodf_pos(unwrapped_angle_rad + hfi_noise, 2.0f * M_PI);
-            axis.observer_angle_ = fmodf_pos(unwrapped_angle_rad + observer_noise, 2.0f * M_PI);
-        } else {
-            // If no real angle is available, set all to NAN as well
-            axis.fusion_angle_real_ = NAN;
-            axis.hfi_angle_ = NAN;
-            axis.observer_angle_ = NAN;
-        }
+    // Update unified 6-phase controller. When active, this overrides the
+    // per-axis torque commands via signal routing (see SixPhaseAxis).
+    // It runs after the per-axis loops so that its outputs are fresh for
+    // the next PWM update cycle.
+    if (odrv.six_phase_axis_) {
+        odrv.six_phase_axis_->update(timestamp);
     }
+
     // Tell the axis threads that the control loop has finished
     for (auto& axis: axes) {
         if (axis.thread_id_) {

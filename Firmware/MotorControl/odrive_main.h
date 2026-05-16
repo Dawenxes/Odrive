@@ -154,6 +154,7 @@ inline ENUMTYPE operator ~ (ENUMTYPE a) { return static_cast<ENUMTYPE>(~static_c
 #include <oscilloscope.hpp>
 #include <SixMotorControl/dual_hall_sensor.hpp>
 #include <SixMotorControl/dual_current_sensor.hpp>
+#include <SixMotorControl/six_phase_axis.hpp>
 #include <communication/communication.h>
 #include <communication/can/odrive_can.hpp>
 
@@ -260,6 +261,10 @@ public:
     uint32_t dual_hall_consecutive_illegal_count_ = 0;
 
     DualCurrentSensor dual_current_sensor_;
+
+    // Unified 6-phase axis. Created in board.cpp; pointer is set during
+    // global initialization to avoid cross-translation-unit ordering issues.
+    SixPhaseAxis* six_phase_axis_ = nullptr;
     Iph_DualABC_t dual_current_meas_ = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
     bool dual_current_valid_ = false;
 

@@ -241,7 +241,43 @@ interfaces:
         type: readonly bool
         doc: True if both 3-phase current measurements are valid.
       otp_valid: readonly bool
-        
+
+      # Six-phase axis telemetry (exposed when six_phase_axis is active)
+      six_phase_state:
+        type: readonly uint8
+        c_name: six_phase_axis_.current_state_
+        doc: Current state of the unified 6-phase axis (0=UNDEFINED, 1=IDLE, 8=CLOSED_LOOP, ...)
+      six_phase_pos_estimate:
+        type: readonly float32
+        c_name: six_phase_axis_.unified_pos_estimate_
+        unit: turn
+        doc: Unified position estimate from the 6-phase controller.
+      six_phase_vel_estimate:
+        type: readonly float32
+        c_name: six_phase_axis_.unified_vel_estimate_
+        unit: turn/s
+        doc: Unified velocity estimate from the 6-phase controller.
+      six_phase_torque_estimate:
+        type: readonly float32
+        c_name: six_phase_axis_.unified_torque_estimate_
+        unit: Nm
+        doc: Unified torque command from the 6-phase controller.
+      six_phase_Iq_winding1:
+        type: readonly float32
+        c_name: six_phase_axis_.Iq_winding1_
+        unit: A
+        doc: Q-axis current setpoint for winding set 1 (ABC1).
+      six_phase_Iq_winding2:
+        type: readonly float32
+        c_name: six_phase_axis_.Iq_winding2_
+        unit: A
+        doc: Q-axis current setpoint for winding set 2 (ABC2).
+      six_phase_phase_offset:
+        type: readonly float32
+        c_name: six_phase_axis_.config_.phase_offset
+        unit: rad
+        doc: Electrical phase offset between winding set 2 and set 1.
+
     functions:
       test_function: {in: {delta: int32},out: {cnt: int32}}
       get_adc_voltage: 
@@ -521,15 +557,6 @@ interfaces:
             doc: There isn't a valid position estimate available.
       step_dir_active: readonly bool
       last_drv_fault: readonly uint32
-      hfi_angle:
-        type: readonly float32
-        doc: "Spoofed HFI angle for plotting"
-      observer_angle:
-        type: readonly float32
-        doc: "Spoofed observer angle for plotting"
-      fusion_angle_real:
-        type: readonly float32
-        doc: "Real fused angle for plotting"
       steps: 
         type: readonly int64
         brief: The current commanded position, in steps, while in `step_dir` mode
@@ -990,6 +1017,56 @@ interfaces:
               Note that this feature is only works on devices with three current
               sensors (e.g. ODrive v4).
           dc_calib_tau: float32
+
+  ODrive.SixPhaseAxis:
+    c_is_class: True
+    attributes:
+      current_state:
+        type: readonly uint8
+        doc: Current state of the unified 6-phase axis state machine.
+      requested_state:
+        type: uint8
+        doc: Command a state transition on the unified 6-phase axis.
+      unified_pos_estimate:
+        type: readonly float32
+        unit: turn
+        doc: Position estimate from the unified encoder.
+      unified_vel_estimate:
+        type: readonly float32
+        unit: turn/s
+        doc: Velocity estimate from the unified encoder.
+      unified_torque_estimate:
+        type: readonly float32
+        unit: Nm
+        doc: Torque command from the unified 6-phase controller.
+      Iq_winding1:
+        type: readonly float32
+        unit: A
+        doc: Q-axis current setpoint for winding set 1.
+      Iq_winding2:
+        type: readonly float32
+        unit: A
+        doc: Q-axis current setpoint for winding set 2.
+      config:
+        c_is_class: False
+        attributes:
+          phase_offset:
+            type: float32
+            unit: rad
+            doc: Electrical angle offset of winding set 2 relative to set 1. Default is pi/6 (30 deg).
+          current_share:
+            type: float32
+            doc: Current sharing ratio between winding sets [0, 1]. 0.5 means equal sharing.
+          require_dual_ready:
+            type: bool
+            doc: If true, both inverters must be healthy for the axis to operate.
+    functions:
+      start_closed_loop:
+        out: {success: bool}
+        doc: Arms both inverters and enters unified closed-loop control.
+      stop_closed_loop:
+        out: {success: bool}
+        doc: Disarms both inverters and returns to idle.
 
   ODrive.Oscilloscope:
     c_is_class: True

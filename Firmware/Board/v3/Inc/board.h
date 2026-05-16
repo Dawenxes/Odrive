@@ -138,6 +138,36 @@ static inline bool board_apply_config() { return true; }
 
 void system_init();
 bool board_init();
-void start_timers();
+
+// ------------------------------------------------------------------------
+// PWM synchronization for dual-three-phase (6-phase) mode
+// ------------------------------------------------------------------------
+
+/**
+ * @brief Configures TIM1 as master and TIM8 as slave in Trigger Mode.
+ *
+ * When enabled, TIM8 will wait for TIM1's Update event (TRGO) to start
+ * counting. This guarantees hardware-level phase synchronization between
+ * the two inverters. Call this once during board initialization.
+ */
+void configure_pwm_master_slave_sync();
+
+/**
+ * @brief Starts TIM1, TIM8 and TIM13 with optional phase synchronization.
+ *
+ * @param six_phase_sync: If true, TIM8 is started in slave trigger mode
+ *        and both timers run in phase. If false, legacy 90° offset is used.
+ */
+void start_timers(bool six_phase_sync = false);
+
+/**
+ * @brief Returns true if TIM1 and TIM8 counters are within tolerance.
+ *        Call from high-priority context (e.g. TIM8 IRQ handler).
+ */
+bool check_pwm_phase_sync();
+
+// Allowable counter difference between TIM1 and TIM8 in six-phase mode.
+// In center-aligned mode at 168MHz, ±8 clocks ≈ 47ns.
+#define TIM_PHASE_SYNC_THRESHOLD 8
 
 #endif // __BOARD_CONFIG_H
