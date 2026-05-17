@@ -143,6 +143,8 @@ bool board_init();
 // PWM synchronization for dual-three-phase (6-phase) mode
 // ------------------------------------------------------------------------
 
+#ifdef __cplusplus
+
 /**
  * @brief Configures TIM1 as master and TIM8 as slave in Trigger Mode.
  *
@@ -165,6 +167,13 @@ void start_timers(bool six_phase_sync = false);
  *        Call from high-priority context (e.g. TIM8 IRQ handler).
  */
 bool check_pwm_phase_sync();
+
+#else
+
+/* C-compatible declarations (no default args) */
+void start_timers(void);
+
+#endif
 
 // Allowable counter difference between TIM1 and TIM8 in six-phase mode.
 // In center-aligned mode at 168MHz, ±8 clocks ≈ 47ns.

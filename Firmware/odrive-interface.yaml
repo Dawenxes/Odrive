@@ -245,36 +245,36 @@ interfaces:
       # Six-phase axis telemetry (exposed when six_phase_axis is active)
       six_phase_state:
         type: readonly uint8
-        c_name: six_phase_axis_.current_state_
+        c_getter: "six_phase_axis_->current_state_"
         doc: Current state of the unified 6-phase axis (0=UNDEFINED, 1=IDLE, 8=CLOSED_LOOP, ...)
       six_phase_pos_estimate:
         type: readonly float32
-        c_name: six_phase_axis_.unified_pos_estimate_
+        c_getter: "six_phase_axis_->unified_pos_estimate_"
         unit: turn
         doc: Unified position estimate from the 6-phase controller.
       six_phase_vel_estimate:
         type: readonly float32
-        c_name: six_phase_axis_.unified_vel_estimate_
+        c_getter: "six_phase_axis_->unified_vel_estimate_"
         unit: turn/s
         doc: Unified velocity estimate from the 6-phase controller.
       six_phase_torque_estimate:
         type: readonly float32
-        c_name: six_phase_axis_.unified_torque_estimate_
+        c_getter: "six_phase_axis_->unified_torque_estimate_"
         unit: Nm
         doc: Unified torque command from the 6-phase controller.
       six_phase_Iq_winding1:
         type: readonly float32
-        c_name: six_phase_axis_.Iq_winding1_
+        c_getter: "six_phase_axis_->Iq_winding1_"
         unit: A
         doc: Q-axis current setpoint for winding set 1 (ABC1).
       six_phase_Iq_winding2:
         type: readonly float32
-        c_name: six_phase_axis_.Iq_winding2_
+        c_getter: "six_phase_axis_->Iq_winding2_"
         unit: A
         doc: Q-axis current setpoint for winding set 2 (ABC2).
       six_phase_phase_offset:
         type: readonly float32
-        c_name: six_phase_axis_.config_.phase_offset
+        c_getter: "six_phase_axis_->config_.phase_offset"
         unit: rad
         doc: Electrical phase offset between winding set 2 and set 1.
 

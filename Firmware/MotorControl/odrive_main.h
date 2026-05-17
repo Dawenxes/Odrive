@@ -125,6 +125,7 @@ struct TaskTimes {
 // Forward Declarations
 class Axis;
 class Motor;
+class SixPhaseAxis;
 
 // TODO: move
 // this is technically not thread-safe but practically it might be

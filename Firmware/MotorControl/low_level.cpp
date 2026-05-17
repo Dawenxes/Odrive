@@ -167,7 +167,7 @@ void start_adc_pwm() {
     osDelay(2);
 
 
-    start_timers();
+    start_timers(true);
 
 
     // Start brake resistor PWM in floating output configuration

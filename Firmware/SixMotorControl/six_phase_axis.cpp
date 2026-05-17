@@ -2,7 +2,6 @@
 #include "six_phase_axis.hpp"
 #include "motor.hpp"
 #include "encoder.hpp"
-#include "controller.hpp"
 #include "open_loop_controller.hpp"
 #include "sensorless_estimator.hpp"
 #include "trapTraj.hpp"
@@ -406,7 +405,7 @@ bool SixPhaseAxis::run_homing() {
 
     // Phase 1: drive toward endstop at homing speed
     controller_.config_.pos_gain = 0.0f;  // pure velocity mode
-    controller_.vel_setpoint_ = -controller_.config_.homing_speed;
+    controller_.vel_setpoint_ = -config_.homing_speed;
     controller_.pos_setpoint_ = 0.0f;
 
     bool done = false;

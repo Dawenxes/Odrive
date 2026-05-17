@@ -64,6 +64,7 @@ odrive_firmware_pkg = {
     root = '.',
     include_dirs = {
         '.',
+        'SixMotorControl',
         'MotorControl',
         'fibre-cpp/include',
     },
@@ -93,14 +94,16 @@ odrive_firmware_pkg = {
         'Drivers/STM32/stm32_nvm.c',
         'Drivers/STM32/stm32_spi_arbiter.cpp',
         'communication/can/can_simple.cpp',
-        'communication/can/odrive_can.cpp',    
+        'communication/can/odrive_can.cpp',
         'communication/communication.cpp',
         'communication/ascii_protocol.cpp',
         'communication/interface_uart.cpp',
         'communication/interface_usb.cpp',
         'communication/interface_i2c.cpp',
         'FreeRTOS-openocd.c',
-        'autogen/version.c'
+        'autogen/version.c',
+        'SixMotorControl/six_phase_axis.cpp',
+        'SixMotorControl/six_phase_controller.cpp'
     }
 }
 

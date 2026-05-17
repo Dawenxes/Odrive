@@ -386,6 +386,10 @@ bool board_init() {
 // PWM master-slave sync configuration
 // ------------------------------------------------------------------------
 
+// When true, M1 uses the same timestamp offset as M0 (for six-phase sync mode).
+// Set by start_timers(true) and cleared by start_timers(false).
+volatile bool timestamp_six_phase_sync = false;
+
 void configure_pwm_master_slave_sync() {
     CRITICAL_SECTION() {
         // Stop both timers before reconfiguring
@@ -531,10 +535,6 @@ void TIM5_IRQHandler(void) {
 
 volatile uint32_t timestamp_ = 0;
 volatile bool counting_down_ = false;
-
-// When true, M1 uses the same timestamp offset as M0 (for six-phase sync mode).
-// Set by start_timers(true) and cleared by start_timers(false).
-volatile bool timestamp_six_phase_sync = false;
 
 void TIM8_UP_TIM13_IRQHandler(void) {
     COUNT_IRQ(TIM8_UP_TIM13_IRQn);

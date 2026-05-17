@@ -5,6 +5,11 @@
 #include <cstdint>
 #include <functional>
 
+#include <board.h>
+
+#include "axis.hpp"
+#include "open_loop_controller.hpp"
+#include "acim_estimator.hpp"
 #include "six_phase_controller.hpp"
 #include "phase_offset_provider.hpp"
 #include "six_phase_motor.hpp"
@@ -17,7 +22,6 @@ class SensorlessEstimator;
 class TrapezoidalTrajectory;
 class Endstop;
 class MechanicalBrake;
-class OpenLoopController;
 
 /**
  * @brief Unified axis controller for a dual-three-phase (6-phase) motor.
@@ -42,6 +46,7 @@ class SixPhaseAxis {
 public:
     using State = ODriveIntf::AxisIntf::AxisState;
     using Error = ODriveIntf::AxisIntf::Error;
+    static constexpr Error ERROR_NONE = ODriveIntf::AxisIntf::ERROR_NONE;
     using LockinConfig_t = Axis::LockinConfig_t;
 
     struct Config_t {
@@ -50,7 +55,9 @@ public:
         bool startup_closed_loop_control = false;
         bool startup_homing = false;
 
-        bool enable_sensorless_mode = false;
+        float homing_speed = 0.25f; // [turn/s]
+
+                bool enable_sensorless_mode = false;
         bool enable_watchdog = false;
         float watchdog_timeout = 0.0f;
 
@@ -116,6 +123,8 @@ public:
     PhaseOffsetProvider phase_offset_provider_;
     AcimEstimator acim_estimator_;
 
+    int axis_num_ = 0;
+
     // Hardware references
     Motor& motor0_;
     Motor& motor1_;
@@ -126,7 +135,6 @@ public:
     Endstop& max_endstop_;
     MechanicalBrake& mechanical_brake_;
 
-    int axis_num_ = 0;
     Config_t config_;
 
     // State / error
