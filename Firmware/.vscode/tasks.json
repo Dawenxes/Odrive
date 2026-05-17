@@ -40,7 +40,7 @@
         {
             "label": "Launch ODrive GUI Server",
             "type": "shell",
-            "command": "../../.venv/Scripts/python",
+            "command": "python",
             "args": [
                 "odrive_server.py",
                 "../../tools"

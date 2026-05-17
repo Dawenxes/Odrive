@@ -413,8 +413,8 @@ void configure_pwm_master_slave_sync() {
 }
 
 bool check_pwm_phase_sync() {
-    int32_t diff = (int32_t)TIM1->CNT - (int32_t)TIM8->CNT;
-    return std::abs(diff) <= TIM_PHASE_SYNC_THRESHOLD;
+    odrv.timer_sync_diff_ = (int32_t)TIM1->CNT - (int32_t)TIM8->CNT;
+    return std::abs(odrv.timer_sync_diff_) <= TIM_PHASE_SYNC_THRESHOLD;
 }
 
 void start_timers(bool six_phase_sync) {

@@ -270,6 +270,8 @@ public:
     bool dual_current_valid_ = false;
 
     uint32_t last_update_timestamp_ = 0;
+    int32_t timer_sync_diff_ = 0; // [ticks] For debugging timer sync
+
     uint32_t n_evt_sampling_ = 0;
     uint32_t n_evt_control_loop_ = 0;
     bool task_timers_armed_ = false;
